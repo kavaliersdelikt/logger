@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Logger Web Panel</title>
+  <style>
+    :root { color-scheme: dark; --bg:#07111f; --panel:#101b2d; --border:#243347; --text:#f4f7fb; --muted:#9fb0c3; --accent:#4cc9f0; --ok:#4ade80; }
+    body { margin:0; font-family: Inter, Segoe UI, Roboto, Arial, sans-serif; background:var(--bg); color:var(--text); }
+    .wrap { max-width: 1280px; margin: 0 auto; padding: 24px; }
+    .header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
+    .card { background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:16px; box-shadow:0 8px 24px rgba(0,0,0,.22); }
+    .stats { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:14px; margin-bottom:16px; }
+    .stat { padding:12px; border-radius:12px; background:rgba(255,255,255,.03); }
+    .stat .label { color:var(--muted); font-size:.85rem; }
+    .stat .value { font-size:1.35rem; font-weight:700; margin-top:6px; }
+    .controls { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+    .layout { display:grid; grid-template-columns: 2.2fr 1fr; gap:16px; }
+    .panel-list { display:flex; flex-direction:column; gap:10px; }
+    .mini-card { padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:rgba(255,255,255,.03); }
+    .pager { display:flex; gap:8px; justify-content:flex-end; margin-top:10px; }
+    .pager button { padding:8px 10px; }
+    input, select, button { border-radius:10px; padding:10px 12px; border:1px solid var(--border); background:#0e1728; color:var(--text); }
+    button { cursor:pointer; background:var(--accent); color:#061018; font-weight:700; }
+    table { width:100%; border-collapse:collapse; overflow:hidden; border-radius:12px; }
+    th, td { padding:12px 10px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; }
+    th { color:var(--muted); font-size:.8rem; text-transform:uppercase; letter-spacing:.06em; }
+    code { background:rgba(255,255,255,.06); padding:2px 6px; border-radius:6px; }
+    .pill { display:inline-block; padding:4px 8px; border-radius:999px; background:rgba(76,201,240,.15); color:var(--accent); font-size:.8rem; }
+    .muted { color:var(--muted); }
+    .row-wrap { word-break: break-word; }
+    @media (max-width: 900px){ .stats { grid-template-columns:1fr 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="header">
+      <div>
+        <h1>Logger Web Panel</h1>
+        <div class="muted">HTTP-only, operator-friendly, and configurable.</div>
+      </div>
+      <div class="pill" id="status">Loading…</div>
+    </div>
+
+    <div class="stats">
+      <div class="card stat"><div class="label">Events</div><div class="value" id="events">0</div></div>
+      <div class="card stat"><div class="label">Players</div><div class="value" id="players">0</div></div>
+      <div class="card stat"><div class="label">Worlds</div><div class="value" id="worlds">0</div></div>
+      <div class="card stat"><div class="label">Recent Players</div><div class="value" id="recentPlayers">0</div></div>
+    </div>
+
+    <div class="layout">
+      <div class="card">
+        <div class="controls">
+          <select id="playerFilter"></select>
+          <select id="worldFilter"></select>
+          <input id="actionFilter" placeholder="Filter action" />
+          <button onclick="reloadEvents()">Refresh</button>
+        </div>
+        <table>
+          <thead>
+            <tr><th>Time</th><th>Player</th><th>Action</th><th>World</th><th>Subject</th><th>Details</th></tr>
+          </thead>
+          <tbody id="eventTable"></tbody>
+        </table>
+        <div class="pager">
+          <button onclick="changePage(-1)">Previous</button>
+          <span id="pageInfo" class="muted">Page 1</span>
+          <button onclick="changePage(1)">Next</button>
+        </div>
+      </div>
+      <div class="panel-list">
+        <div class="card">
+          <h3>Recent deaths</h3>
+          <div id="recentDeaths"></div>
+        </div>
+        <div class="card">
+          <h3>Action breakdown</h3>
+          <div id="actionBreakdown"></div>
+        </div>
+        <div class="card">
+          <h3>Player summary</h3>
+          <input id="playerSummaryInput" placeholder="Search player" />
+          <button onclick="loadPlayerSummary()" style="margin-top:8px;">Load summary</button>
+          <div id="playerSummary" style="margin-top:10px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const AUTH = 'Basic ' + btoa('__USERNAME__:__PASSWORD__');
+    let currentPage = 1;
+    const pageSize = 100;
+
+    async function loadStats() {
+      const response = await fetch('/api/stats', { headers: { 'Authorization': AUTH }});
+      const data = await response.json();
+      document.getElementById('events').textContent = data.events || 0;
+      document.getElementById('players').textContent = data.players || 0;
+      document.getElementById('worlds').textContent = data.worlds || 0;
+      document.getElementById('recentPlayers').textContent = Array.isArray(data.recentPlayers) ? data.recentPlayers.length : 0;
+      const deaths = document.getElementById('recentDeaths');
+      deaths.innerHTML = '';
+      (data.recentDeaths || []).forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'mini-card';
+        div.innerHTML = `<strong>${item.player || '-'}</strong><div class="muted">${item.timestamp || ''}</div><div>${item.world || ''}</div>`;
+        deaths.appendChild(div);
+      });
+      const breakdown = document.getElementById('actionBreakdown');
+      breakdown.innerHTML = '';
+      Object.entries(data.actionBreakdown || {}).forEach(([action, count]) => {
+        const div = document.createElement('div');
+        div.className = 'mini-card';
+        div.innerHTML = `<strong>${action}</strong><div class="muted">${count} events</div>`;
+        breakdown.appendChild(div);
+      });
+      document.getElementById('status').textContent = 'Online';
+    }
+
+    async function loadFilterOptions() {
+      const playersResponse = await fetch('/api/players', { headers: { 'Authorization': AUTH }});
+      const players = await playersResponse.json();
+      const worldsResponse = await fetch('/api/worlds', { headers: { 'Authorization': AUTH }});
+      const worlds = await worldsResponse.json();
+      const playerSelect = document.getElementById('playerFilter');
+      const worldSelect = document.getElementById('worldFilter');
+      const selectedPlayer = playerSelect.value;
+      const selectedWorld = worldSelect.value;
+      playerSelect.innerHTML = '<option value="">All players</option>' + players.map(p => `<option value="${p}">${p}</option>`).join('');
+      worldSelect.innerHTML = '<option value="">All worlds</option>' + worlds.map(w => `<option value="${w}">${w}</option>`).join('');
+      if (selectedPlayer && [...playerSelect.options].some(option => option.value === selectedPlayer)) {
+        playerSelect.value = selectedPlayer;
+      }
+      if (selectedWorld && [...worldSelect.options].some(option => option.value === selectedWorld)) {
+        worldSelect.value = selectedWorld;
+      }
+    }
+
+    async function loadEvents() {
+      const player = document.getElementById('playerFilter').value;
+      const world = document.getElementById('worldFilter').value;
+      const action = document.getElementById('actionFilter').value;
+      const url = `/api/events?page=${currentPage}&limit=${pageSize}&player=${encodeURIComponent(player)}&world=${encodeURIComponent(world)}&action=${encodeURIComponent(action)}`;
+      const response = await fetch(url, { headers: { 'Authorization': AUTH }});
+      const data = await response.json();
+      const tbody = document.getElementById('eventTable');
+      tbody.innerHTML = '';
+      if (!Array.isArray(data.items) || data.items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="muted">No events found.</td></tr>';
+      } else {
+        for (const event of data.items) {
+          const row = document.createElement('tr');
+          const details = event.details && typeof event.details === 'object' ? JSON.stringify(event.details) : '';
+          row.innerHTML = `
+            <td class="muted">${event.timestamp || ''}</td>
+            <td>${event.player || '-'}</td>
+            <td><code>${event.action || ''}</code></td>
+            <td>${event.world || '-'}</td>
+            <td class="row-wrap">${event.subject || '-'}</td>
+            <td class="row-wrap">${details}</td>`;
+          tbody.appendChild(row);
+        }
+      }
+      const pageInfo = document.getElementById('pageInfo');
+      pageInfo.textContent = `Page ${data.page || 1} / ${data.pages || 1}`;
+    }
+
+    async function loadPlayerSummary() {
+      const player = document.getElementById('playerSummaryInput').value.trim();
+      if (!player) {
+        document.getElementById('playerSummary').innerHTML = '<div class="muted">Enter a player name.</div>';
+        return;
+      }
+      const response = await fetch(`/api/player-summary?player=${encodeURIComponent(player)}`, { headers: { 'Authorization': AUTH }});
+      const data = await response.json();
+      document.getElementById('playerSummary').innerHTML = `
+        <div class="mini-card"><strong>${data.player || '-'}</strong><div class="muted">Events: ${data.eventCount || 0}</div><div class="muted">Deaths: ${data.deathCount || 0}</div></div>
+        ${(data.recentEvents || []).map(event => `<div class="mini-card"><strong>${event.action || '-'}</strong><div class="muted">${event.timestamp || ''}</div><div>${event.world || ''}</div></div>`).join('')}
+      `;
+    }
+
+    function changePage(delta) {
+      currentPage = Math.max(1, currentPage + delta);
+      loadEvents();
+    }
+
+    function reloadEvents() {
+      currentPage = 1;
+      loadStats();
+      loadFilterOptions().then(loadEvents);
+    }
+
+    document.getElementById('playerFilter').addEventListener('change', () => { currentPage = 1; loadEvents(); });
+    document.getElementById('worldFilter').addEventListener('change', () => { currentPage = 1; loadEvents(); });
+    document.getElementById('actionFilter').addEventListener('input', () => { currentPage = 1; loadEvents(); });
+
+    window.onload = reloadEvents;
+    setInterval(reloadEvents, 10000);
+  </script>
+</body>
+</html>
