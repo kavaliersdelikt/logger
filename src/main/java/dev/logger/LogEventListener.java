@@ -2,36 +2,30 @@ package dev.logger;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
-import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
-import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
-import org.bukkit.event.entity.EntityDamageByEntityEvent;
-import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
+import org.bukkit.event.inventory.InventoryDragEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
-import org.bukkit.event.player.PlayerDropItemEvent;
-import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.event.player.PlayerPickupItemEvent;
-import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.event.player.PlayerTeleportEvent;
-import org.bukkit.event.player.PlayerRespawnEvent;
-import org.bukkit.event.block.BlockBreakEvent;
-import org.bukkit.event.block.BlockPlaceEvent;
-import org.bukkit.event.block.BlockIgniteEvent;
-import org.bukkit.event.inventory.InventoryDragEvent;
-import org.bukkit.event.inventory.InventoryAction;
-import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerRespawnEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.block.Action;
-import org.bukkit.Material;
-import org.bukkit.event.inventory.InventoryType;
+import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockIgniteEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -45,6 +39,7 @@ public class LogEventListener implements Listener {
     private final LoggerService loggerService;
     private final PlayerLogTracker tracker;
     private final LoggerConfig config;
+    private final Map<UUID, Long> recentDeathLogs = new HashMap<>();
 
     public LogEventListener(LoggerPlugin plugin, LoggerService loggerService, PlayerLogTracker tracker, LoggerConfig config) {
         this.plugin = plugin;
@@ -191,9 +186,37 @@ public class LogEventListener implements Listener {
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onEntityDamage(EntityDamageEvent event) {
+        if (!(event.getEntity() instanceof Player player)) return;
+        if (!config.isWorldAllowed(player.getWorld().getName())) return;
+        if (!shouldLogDeathDamage(player, event.getFinalDamage(), System.currentTimeMillis())) {
+            return;
+        }
+        Map<String, Object> details = new HashMap<>();
+        details.put("location", formatLocation(player.getLocation()));
+        details.put("cause", event.getCause().name());
+        details.put("damage", String.format("%.2f", event.getFinalDamage()));
+        logDeath(player, details);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPlayerDeath(PlayerDeathEvent event) {
+        Player player = event.getEntity();
+        if (!config.isWorldAllowed(player.getWorld().getName())) return;
+        Map<String, Object> details = new HashMap<>();
+        details.put("location", formatLocation(player.getLocation()));
+        details.put("cause", event.getEntity().getLastDamageCause() != null ? event.getEntity().getLastDamageCause().getCause().name() : "unknown");
+        if (event.getDeathMessage() != null && !event.getDeathMessage().isBlank()) {
+            details.put("message", event.getDeathMessage());
+        }
+        logDeath(player, details);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPlayerRespawn(PlayerRespawnEvent event) {
         Player player = event.getPlayer();
         if (!config.isWorldAllowed(event.getRespawnLocation().getWorld().getName())) return;
+        recentDeathLogs.remove(player.getUniqueId());
         LogRecord record = LogRecord.player("player", "respawn", "player respawned", event.getRespawnLocation().getWorld().getName(), player.getName(), player.getUniqueId(), null);
         dispatch(record);
     }
@@ -282,6 +305,37 @@ public class LogEventListener implements Listener {
         if (event.getPlayer() instanceof Player player) {
             PlayerLogGui.closeDetails(player);
         }
+    }
+
+    boolean shouldLogDeathDamage(Player player, double finalDamage, long now) {
+        if (player == null || finalDamage <= 0) {
+            return false;
+        }
+        double health = Math.max(0.0, player.getHealth());
+        if (health - finalDamage > 0.0) {
+            return false;
+        }
+        Long lastLog = recentDeathLogs.get(player.getUniqueId());
+        if (lastLog != null && now - lastLog < 3000L) {
+            return false;
+        }
+        recentDeathLogs.put(player.getUniqueId(), now);
+        return true;
+    }
+
+    private void logDeath(Player player, Map<String, Object> details) {
+        if (player == null) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        UUID playerId = player.getUniqueId();
+        Long lastLog = recentDeathLogs.get(playerId);
+        if (lastLog != null && now - lastLog < 3000L) {
+            return;
+        }
+        recentDeathLogs.put(playerId, now);
+        LogRecord record = LogRecord.player("player", "death", "player died", player.getWorld().getName(), player.getName(), playerId, details);
+        dispatch(record);
     }
 
     private String formatLocation(int x, int y, int z) {

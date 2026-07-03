@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.5.2] - 2026-07-03
+- Hotfixed player death logging so deaths are recorded reliably even when the primary event path is missed
+- Added a fallback damage-based death check with cooldown protection to prevent duplicate entries
+
 ## [1.5.1] - 2026-07-03
 - Added a built-in web panel with configurable port and optional basic auth
 - Added paginated event browsing and richer summaries for players and deaths
