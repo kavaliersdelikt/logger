@@ -404,19 +404,48 @@ public class WebPanelServer {
                 }
             }
         }
-        int total = allEvents.size();
-        int startIndex = (page - 1) * limit;
-        int endIndex = Math.min(startIndex + limit, total);
-        if (startIndex < total) {
-            events.addAll(allEvents.subList(startIndex, endIndex));
-        }
+        List<Map<String, Object>> sortedEvents = allEvents.stream()
+                .sorted((a, b) -> compareEventTimestamps(a, b))
+                .collect(Collectors.toList());
+        List<Map<String, Object>> pagedEvents = paginateEventsForDisplay(sortedEvents, page, limit);
+        int total = sortedEvents.size();
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("page", page);
         payload.put("limit", limit);
         payload.put("total", total);
         payload.put("pages", total == 0 ? 1 : (int) Math.ceil(total / (double) limit));
-        payload.put("items", events);
+        payload.put("items", pagedEvents);
         return payload;
+    }
+
+    static List<Map<String, Object>> paginateEventsForDisplay(List<Map<String, Object>> events, int page, int limit) {
+        List<Map<String, Object>> sortedEvents = events.stream()
+                .sorted((left, right) -> {
+                    String leftTimestamp = left.containsKey("timestamp") ? String.valueOf(left.get("timestamp")) : "";
+                    String rightTimestamp = right.containsKey("timestamp") ? String.valueOf(right.get("timestamp")) : "";
+                    int timestampComparison = rightTimestamp.compareTo(leftTimestamp);
+                    if (timestampComparison != 0) {
+                        return timestampComparison;
+                    }
+                    return String.valueOf(right.getOrDefault("subject", "")).compareTo(String.valueOf(left.getOrDefault("subject", "")));
+                })
+                .collect(Collectors.toList());
+        int startIndex = (page - 1) * limit;
+        int endIndex = Math.min(startIndex + limit, sortedEvents.size());
+        if (startIndex < 0 || startIndex >= sortedEvents.size()) {
+            return Collections.emptyList();
+        }
+        return new ArrayList<>(sortedEvents.subList(startIndex, endIndex));
+    }
+
+    private int compareEventTimestamps(Map<String, Object> left, Map<String, Object> right) {
+        String leftTimestamp = left.containsKey("timestamp") ? String.valueOf(left.get("timestamp")) : "";
+        String rightTimestamp = right.containsKey("timestamp") ? String.valueOf(right.get("timestamp")) : "";
+        int timestampComparison = rightTimestamp.compareTo(leftTimestamp);
+        if (timestampComparison != 0) {
+            return timestampComparison;
+        }
+        return String.valueOf(right.getOrDefault("subject", "")).compareTo(String.valueOf(left.getOrDefault("subject", "")));
     }
 
     private List<Map<String, Object>> loadRecentDeaths(int limit) throws IOException {

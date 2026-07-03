@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.5.4] - 2026-07-03
+- Fixed the web panel event list so new events appear in the visible table again
+- Ensured the panel sorts and paginates events newest-first instead of leaving older events on the first page
+
 ## [1.5.3] - 2026-07-03
 - Fixed the web panel refresh loop so the dashboard remains live and updates automatically again
 - Preserved player/world/action filter selections across refreshes to avoid the earlier filter reset issue
