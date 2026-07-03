@@ -40,4 +40,4 @@ See `CHANGELOG.md` for release notes.
 Pull requests welcome — please include tests or clear reproduction steps for bugs.
 
 ## License
-No license specified. Add a `LICENSE` file to make the repo public-friendly.
+MIT Licensed.
