@@ -1,11 +1,11 @@
 # Logger
 
-A compact, async JSON logger for PaperMC with Discord webhook support and per-player GUI.
+A compact, async JSON logger for Paper with Discord webhook support, a web panel and per-player GUI.
 
 ## Download
 Latest JAR (release):
 
-- https://github.com/kavaliersdelikt/logger/releases/download/v1.5.4/logger-1.5.4.jar
+- https://github.com/kavaliersdelikt/logger/releases/download/v1.5.4/logger-1.5.4.jar - 26.1.2 tested
 
 ## Installation
 1. Drop `logger-1.5.4.jar` into your server's `plugins/` folder.
