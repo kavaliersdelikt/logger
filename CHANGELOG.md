@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.5.3] - 2026-07-03
+- Fixed the web panel refresh loop so the dashboard remains live and updates automatically again
+- Preserved player/world/action filter selections across refreshes to avoid the earlier filter reset issue
+
 ## [1.5.2] - 2026-07-03
 - Hotfixed player death logging so deaths are recorded reliably even when the primary event path is missed
 - Added a fallback damage-based death check with cooldown protection to prevent duplicate entries

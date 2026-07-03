@@ -5,10 +5,10 @@ A compact, async JSON logger for PaperMC with Discord webhook support and per-pl
 ## Download
 Latest JAR (release):
 
-- https://github.com/kavaliersdelikt/logger/releases/latest/download/logger-1.5.2.jar
+- https://github.com/kavaliersdelikt/logger/releases/latest/download/logger-1.5.3.jar
 
 ## Installation
-1. Drop `logger-1.5.2.jar` into your server's `plugins/` folder.
+1. Drop `logger-1.5.3.jar` into your server's `plugins/` folder.
 2. Start the server once to generate default `config.yml`.
 3. Configure `config.yml` (set `discord-webhook-url` to enable Discord notifications and adjust web panel settings if needed).
 4. Reload or restart the server.

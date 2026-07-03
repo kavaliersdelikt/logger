@@ -92,49 +92,84 @@
     const AUTH = 'Basic ' + btoa('__USERNAME__:__PASSWORD__');
     let currentPage = 1;
     const pageSize = 100;
+    const FILTER_KEYS = { player: 'logger-panel-player', world: 'logger-panel-world', action: 'logger-panel-action' };
+
+    function readFilters() {
+      return {
+        player: localStorage.getItem(FILTER_KEYS.player) || '',
+        world: localStorage.getItem(FILTER_KEYS.world) || '',
+        action: localStorage.getItem(FILTER_KEYS.action) || ''
+      };
+    }
+
+    function persistFilters() {
+      const player = document.getElementById('playerFilter').value || '';
+      const world = document.getElementById('worldFilter').value || '';
+      const action = document.getElementById('actionFilter').value || '';
+      localStorage.setItem(FILTER_KEYS.player, player);
+      localStorage.setItem(FILTER_KEYS.world, world);
+      localStorage.setItem(FILTER_KEYS.action, action);
+    }
+
+    function restoreFilters() {
+      const filters = readFilters();
+      document.getElementById('playerFilter').value = filters.player;
+      document.getElementById('worldFilter').value = filters.world;
+      document.getElementById('actionFilter').value = filters.action;
+    }
 
     async function loadStats() {
-      const response = await fetch('/api/stats', { headers: { 'Authorization': AUTH }});
-      const data = await response.json();
-      document.getElementById('events').textContent = data.events || 0;
-      document.getElementById('players').textContent = data.players || 0;
-      document.getElementById('worlds').textContent = data.worlds || 0;
-      document.getElementById('recentPlayers').textContent = Array.isArray(data.recentPlayers) ? data.recentPlayers.length : 0;
-      const deaths = document.getElementById('recentDeaths');
-      deaths.innerHTML = '';
-      (data.recentDeaths || []).forEach(item => {
-        const div = document.createElement('div');
-        div.className = 'mini-card';
-        div.innerHTML = `<strong>${item.player || '-'}</strong><div class="muted">${item.timestamp || ''}</div><div>${item.world || ''}</div>`;
-        deaths.appendChild(div);
-      });
-      const breakdown = document.getElementById('actionBreakdown');
-      breakdown.innerHTML = '';
-      Object.entries(data.actionBreakdown || {}).forEach(([action, count]) => {
-        const div = document.createElement('div');
-        div.className = 'mini-card';
-        div.innerHTML = `<strong>${action}</strong><div class="muted">${count} events</div>`;
-        breakdown.appendChild(div);
-      });
-      document.getElementById('status').textContent = 'Online';
+      try {
+        const response = await fetch('/api/stats', { headers: { 'Authorization': AUTH }});
+        const data = await response.json();
+        document.getElementById('events').textContent = data.events || 0;
+        document.getElementById('players').textContent = data.players || 0;
+        document.getElementById('worlds').textContent = data.worlds || 0;
+        document.getElementById('recentPlayers').textContent = Array.isArray(data.recentPlayers) ? data.recentPlayers.length : 0;
+        const deaths = document.getElementById('recentDeaths');
+        deaths.innerHTML = '';
+        (data.recentDeaths || []).forEach(item => {
+          const div = document.createElement('div');
+          div.className = 'mini-card';
+          div.innerHTML = `<strong>${item.player || '-'}</strong><div class="muted">${item.timestamp || ''}</div><div>${item.world || ''}</div>`;
+          deaths.appendChild(div);
+        });
+        const breakdown = document.getElementById('actionBreakdown');
+        breakdown.innerHTML = '';
+        Object.entries(data.actionBreakdown || {}).forEach(([action, count]) => {
+          const div = document.createElement('div');
+          div.className = 'mini-card';
+          div.innerHTML = `<strong>${action}</strong><div class="muted">${count} events</div>`;
+          breakdown.appendChild(div);
+        });
+        document.getElementById('status').textContent = 'Online';
+      } catch (error) {
+        document.getElementById('status').textContent = 'Offline';
+      }
     }
 
     async function loadFilterOptions() {
-      const playersResponse = await fetch('/api/players', { headers: { 'Authorization': AUTH }});
-      const players = await playersResponse.json();
-      const worldsResponse = await fetch('/api/worlds', { headers: { 'Authorization': AUTH }});
-      const worlds = await worldsResponse.json();
-      const playerSelect = document.getElementById('playerFilter');
-      const worldSelect = document.getElementById('worldFilter');
-      const selectedPlayer = playerSelect.value;
-      const selectedWorld = worldSelect.value;
-      playerSelect.innerHTML = '<option value="">All players</option>' + players.map(p => `<option value="${p}">${p}</option>`).join('');
-      worldSelect.innerHTML = '<option value="">All worlds</option>' + worlds.map(w => `<option value="${w}">${w}</option>`).join('');
-      if (selectedPlayer && [...playerSelect.options].some(option => option.value === selectedPlayer)) {
-        playerSelect.value = selectedPlayer;
-      }
-      if (selectedWorld && [...worldSelect.options].some(option => option.value === selectedWorld)) {
-        worldSelect.value = selectedWorld;
+      try {
+        const playersResponse = await fetch('/api/players', { headers: { 'Authorization': AUTH }});
+        const players = await playersResponse.json();
+        const worldsResponse = await fetch('/api/worlds', { headers: { 'Authorization': AUTH }});
+        const worlds = await worldsResponse.json();
+        const playerSelect = document.getElementById('playerFilter');
+        const worldSelect = document.getElementById('worldFilter');
+        const saved = readFilters();
+        const selectedPlayer = playerSelect.value || saved.player;
+        const selectedWorld = worldSelect.value || saved.world;
+        playerSelect.innerHTML = '<option value="">All players</option>' + players.map(p => `<option value="${p}">${p}</option>`).join('');
+        worldSelect.innerHTML = '<option value="">All worlds</option>' + worlds.map(w => `<option value="${w}">${w}</option>`).join('');
+        if (selectedPlayer && [...playerSelect.options].some(option => option.value === selectedPlayer)) {
+          playerSelect.value = selectedPlayer;
+        }
+        if (selectedWorld && [...worldSelect.options].some(option => option.value === selectedWorld)) {
+          worldSelect.value = selectedWorld;
+        }
+        restoreFilters();
+      } catch (error) {
+        document.getElementById('status').textContent = 'Offline';
       }
     }
 
@@ -143,28 +178,32 @@
       const world = document.getElementById('worldFilter').value;
       const action = document.getElementById('actionFilter').value;
       const url = `/api/events?page=${currentPage}&limit=${pageSize}&player=${encodeURIComponent(player)}&world=${encodeURIComponent(world)}&action=${encodeURIComponent(action)}`;
-      const response = await fetch(url, { headers: { 'Authorization': AUTH }});
-      const data = await response.json();
-      const tbody = document.getElementById('eventTable');
-      tbody.innerHTML = '';
-      if (!Array.isArray(data.items) || data.items.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="muted">No events found.</td></tr>';
-      } else {
-        for (const event of data.items) {
-          const row = document.createElement('tr');
-          const details = event.details && typeof event.details === 'object' ? JSON.stringify(event.details) : '';
-          row.innerHTML = `
-            <td class="muted">${event.timestamp || ''}</td>
-            <td>${event.player || '-'}</td>
-            <td><code>${event.action || ''}</code></td>
-            <td>${event.world || '-'}</td>
-            <td class="row-wrap">${event.subject || '-'}</td>
-            <td class="row-wrap">${details}</td>`;
-          tbody.appendChild(row);
+      try {
+        const response = await fetch(url, { headers: { 'Authorization': AUTH }});
+        const data = await response.json();
+        const tbody = document.getElementById('eventTable');
+        tbody.innerHTML = '';
+        if (!Array.isArray(data.items) || data.items.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" class="muted">No events found.</td></tr>';
+        } else {
+          for (const event of data.items) {
+            const row = document.createElement('tr');
+            const details = event.details && typeof event.details === 'object' ? JSON.stringify(event.details) : '';
+            row.innerHTML = `
+              <td class="muted">${event.timestamp || ''}</td>
+              <td>${event.player || '-'}</td>
+              <td><code>${event.action || ''}</code></td>
+              <td>${event.world || '-'}</td>
+              <td class="row-wrap">${event.subject || '-'}</td>
+              <td class="row-wrap">${details}</td>`;
+            tbody.appendChild(row);
+          }
         }
+        const pageInfo = document.getElementById('pageInfo');
+        pageInfo.textContent = `Page ${data.page || 1} / ${data.pages || 1}`;
+      } catch (error) {
+        document.getElementById('status').textContent = 'Offline';
       }
-      const pageInfo = document.getElementById('pageInfo');
-      pageInfo.textContent = `Page ${data.page || 1} / ${data.pages || 1}`;
     }
 
     async function loadPlayerSummary() {
@@ -189,15 +228,22 @@
     function reloadEvents() {
       currentPage = 1;
       loadStats();
-      loadFilterOptions().then(loadEvents);
+      loadFilterOptions().finally(() => loadEvents());
     }
 
-    document.getElementById('playerFilter').addEventListener('change', () => { currentPage = 1; loadEvents(); });
-    document.getElementById('worldFilter').addEventListener('change', () => { currentPage = 1; loadEvents(); });
-    document.getElementById('actionFilter').addEventListener('input', () => { currentPage = 1; loadEvents(); });
+    document.getElementById('playerFilter').addEventListener('change', () => { persistFilters(); currentPage = 1; loadEvents(); });
+    document.getElementById('worldFilter').addEventListener('change', () => { persistFilters(); currentPage = 1; loadEvents(); });
+    document.getElementById('actionFilter').addEventListener('input', () => { persistFilters(); currentPage = 1; loadEvents(); });
 
-    window.onload = reloadEvents;
-    setInterval(reloadEvents, 10000);
+    window.onload = () => {
+      restoreFilters();
+      reloadEvents();
+    };
+    setInterval(() => {
+      persistFilters();
+      loadStats();
+      loadEvents();
+    }, 10000);
   </script>
 </body>
 </html>

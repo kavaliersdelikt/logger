@@ -1,6 +1,6 @@
 name: Logger
 main: dev.logger.LoggerPlugin
-version: 1.5.2
+version: 1.5.3
 api-version: 1.26
 author: kavaliersdelikt
 description: A container-safe async JSON logger with Discord webhook integration and player tracking GUI.
