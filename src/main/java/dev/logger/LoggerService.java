@@ -10,7 +10,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.time.format.DateTimeFormatter;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -41,7 +40,7 @@ public class LoggerService {
                 if (config.isEnableFileLogging()) {
                     writeFile(record);
                 }
-                if (config.isEnableDiscord()) {
+                if (config.isEnableDiscord() && shouldSendDiscord(record)) {
                     discordQueue.offer(record);
                 }
             } catch (Exception exception) {
@@ -50,17 +49,46 @@ public class LoggerService {
         });
     }
 
+    private boolean shouldSendDiscord(LogRecord record) {
+        if (record == null) return false;
+        if ("block".equals(record.getSource()) && ("break".equals(record.getAction()) || "place".equals(record.getAction()))) {
+            return false;
+        }
+        return !"container".equals(record.getSource());
+    }
+
     private void writeFile(LogRecord record) throws IOException {
         Path folder = plugin.getDataFolder().toPath().resolve(config.getLogFolder());
         Files.createDirectories(folder);
         String fileName = config.getLogFilePattern().replace("%DATE%", java.time.LocalDate.now().toString());
-        Path file = folder.resolve(fileName);
+        Path file = resolveLogFilePath(folder, fileName, config.isLogRotationEnabled(), config.getMaxLogFileSizeBytes(),
+                Files.exists(folder.resolve(fileName)) ? Files.size(folder.resolve(fileName)) : 0L);
         String line = record.toJson(config.isLogJsonPretty());
         try (BufferedWriter writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8,
                 StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.APPEND)) {
             writer.write(line);
             writer.write(System.lineSeparator());
             writer.flush();
+        }
+    }
+
+    static Path resolveLogFilePath(Path folder, String fileName, boolean rotationEnabled, long maxFileSizeBytes, long currentFileSize) throws IOException {
+        Path file = folder.resolve(fileName);
+        if (!rotationEnabled || !Files.exists(file) || currentFileSize < maxFileSizeBytes) {
+            return file;
+        }
+
+        String name = file.getFileName().toString();
+        int dotIndex = name.lastIndexOf('.');
+        String baseName = dotIndex >= 0 ? name.substring(0, dotIndex) : name;
+        String extension = dotIndex >= 0 ? name.substring(dotIndex) : "";
+        int index = 1;
+        while (true) {
+            Path rotatedFile = folder.resolve(baseName + "-" + index + extension);
+            if (!Files.exists(rotatedFile)) {
+                return rotatedFile;
+            }
+            index++;
         }
     }
 
@@ -136,6 +164,10 @@ public class LoggerService {
 
     public int getDiscordQueueSize() {
         return discordQueue.queueSize();
+    }
+
+    public void clearDiscordQueue() {
+        discordQueue.clear();
     }
 
     public void logSync(LogRecord record) {

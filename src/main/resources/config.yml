@@ -8,6 +8,9 @@
 enable-file-logging: true
 log-folder: logs
 log-file-pattern: logger-%DATE%.json
+log-rotation:
+  enabled: true
+  max-file-size-bytes: 10485760
 log-json-pretty: false
 
 enable-discord: true
@@ -17,6 +20,14 @@ discord-queue-max-size: 1000
 discord-flush-interval-ms: 1500
 discord-backoff-ms: 5000
 discord-max-retries: 3
+
+web-panel:
+  enabled: false
+  host: 0.0.0.0
+  port: 8080
+  auth-enabled: true
+  username: admin
+  password: change-me
 
 thread-pool-size: 4
 max-player-cache: 200

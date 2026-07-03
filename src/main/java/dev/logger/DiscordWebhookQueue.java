@@ -65,7 +65,6 @@ public class DiscordWebhookQueue {
         }
         int position = queue.size() + 1;
         if (!queue.offerLast(new QueuedRecord(record, position))) {
-            plugin.getLogger().warning("Discord queue full, dropping webhook event");
             return false;
         }
         return true;
@@ -73,6 +72,10 @@ public class DiscordWebhookQueue {
 
     public int queueSize() {
         return queue.size();
+    }
+
+    public void clear() {
+        queue.clear();
     }
 
     private void flushQueue() {
