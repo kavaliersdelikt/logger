@@ -1,0 +1,27 @@
+# Logger plugin configuration
+# This is intentionally simple and ready for future upgrades:
+# - JSON formatting upgrades
+# - log rotation rules
+# - per-world filters
+# - performance scaling
+
+enable-file-logging: true
+log-folder: logs
+log-file-pattern: logger-%DATE%.json
+log-json-pretty: false
+
+enable-discord: true
+discord-webhook-url: ""
+discord-timeout-ms: 5000
+discord-queue-max-size: 1000
+discord-flush-interval-ms: 1500
+discord-backoff-ms: 5000
+discord-max-retries: 3
+
+thread-pool-size: 4
+max-player-cache: 200
+
+world-filters:
+  enabled: false
+  allowed: []
+  excluded: []

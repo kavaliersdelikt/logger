@@ -1,0 +1,11 @@
+target/
+.idea/
+*.iml
+.classpath
+.project
+.settings/
+/.venv
+*.log
+logs/
+/.DS_Store
+node_modules/
